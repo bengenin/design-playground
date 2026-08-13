@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Website Intro Experiment</title>
+  <style>
+    :root {
+      --static-duration: 1300ms;
+      --text-duration: 900ms;
+      --fade-duration: 550ms;
+      --screen-width: min(46vw, 320px);
+      --screen-ratio: 1.63 / 1;
+      --bg: #171918;
+      --screen-bg: #d8d6ca;
+      --screen-border: rgba(193, 230, 222, .7);
+      --site-bg: #f1f0ec;
+      --text: #111;
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      min-height: 100%;
+      font-family: Arial, Helvetica, sans-serif;
+      background: var(--site-bg);
+      color: var(--text);
+    }
+
+    body { min-height: 100vh; }
+
+    .site {
+      min-height: 100vh;
+      padding: clamp(24px, 4vw, 52px);
+      opacity: 0;
+      transform: translateY(8px);
+      transition: opacity .7s ease, transform .7s ease;
+    }
+
+    .site.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .nav {
+      display: flex;
+      justify-content: space-between;
+      gap: 24px;
+      font-size: 12px;
+      letter-spacing: .12em;
+    }
+
+    .muted { opacity: .45; }
+
+    .hero {
+      position: absolute;
+      left: clamp(24px, 4vw, 52px);
+      right: clamp(24px, 4vw, 52px);
+      bottom: clamp(34px, 7vw, 74px);
+      max-width: 760px;
+    }
+
+    .eyebrow {
+      margin: 0 0 18px;
+      font-size: 12px;
+      letter-spacing: .12em;
+      opacity: .42;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(36px, 6vw, 72px);
+      line-height: .98;
+      font-weight: 500;
+      letter-spacing: -.045em;
+    }
+
+    .current {
+      margin-top: 24px;
+      font-size: 14px;
+      opacity: .55;
+    }
+
+    .intro {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--bg);
+      opacity: 1;
+      transition: opacity var(--fade-duration) ease;
+      z-index: 10;
+    }
+
+    .intro.exit {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .screen {
+      position: relative;
+      width: var(--screen-width);
+      aspect-ratio: var(--screen-ratio);
+      padding: 5px;
+      background: #d8ddd5;
+      border: 1px solid var(--screen-border);
+      box-shadow: 0 0 0 2px rgba(95, 130, 126, .45), 0 0 20px rgba(164, 220, 211, .12);
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      background: var(--screen-bg);
+      image-rendering: pixelated;
+    }
+
+    .hello {
+      position: absolute;
+      inset: 5px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--screen-bg);
+      color: #121313;
+      font-size: clamp(18px, 3vw, 30px);
+      font-weight: 500;
+      letter-spacing: -.035em;
+      opacity: 0;
+      transition: opacity .16s ease;
+    }
+
+    .hello.show { opacity: 1; }
+
+    .replay {
+      position: fixed;
+      right: 18px;
+      bottom: 18px;
+      z-index: 20;
+      border: 1px solid rgba(0,0,0,.16);
+      border-radius: 999px;
+      padding: 9px 13px;
+      background: rgba(241,240,236,.9);
+      color: #111;
+      font: inherit;
+      font-size: 12px;
+      cursor: pointer;
+    }
+
+    @media (max-width: 600px) {
+      :root { --screen-width: min(64vw, 300px); }
+      .nav .muted { display: none; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .intro { display: none; }
+      .site { opacity: 1; transform: none; }
+      .replay { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <main class="site" id="site" aria-hidden="true">
+    <nav class="nav">
+      <span>BEN GENIN</span>
+      <span class="muted">CV · LINKEDIN · ASK BEN</span>
+    </nav>
+
+    <section class="hero">
+      <p class="eyebrow">PARIS → DUBLIN</p>
+      <h1>TECH SALES · GTM · DESIGN · TENNIS</h1>
+      <p class="current">Currently, Lead Account Executive at LinkedIn.</p>
+    </section>
+  </main>
+
+  <div class="intro" id="intro" aria-label="Intro animation">
+    <div class="screen">
+      <canvas id="noise" width="72" height="44" aria-hidden="true"></canvas>
+      <div class="hello" id="hello">Hey, I’m Ben</div>
+    </div>
+  </div>
+
+  <button class="replay" id="replay" type="button">Replay intro</button>
+
+  <script>
+    const canvas = document.getElementById('noise');
+    const ctx = canvas.getContext('2d', { alpha: false });
+    const intro = document.getElementById('intro');
+    const hello = document.getElementById('hello');
+    const site = document.getElementById('site');
+    const replay = document.getElementById('replay');
+
+    const STATIC_MS = 1300;
+    const TEXT_MS = 900;
+    const FRAME_MS = 78;
+
+    let noiseTimer;
+    let sequenceTimers = [];
+
+    function drawNoise() {
+      const w = canvas.width;
+      const h = canvas.height;
+      const image = ctx.createImageData(w, h);
+      const d = image.data;
+      const frame = Math.floor(performance.now() / FRAME_MS);
+
+      for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+          const i = (y * w + x) * 4;
+          const blockX = Math.floor(x / 3);
+          const blockY = Math.floor(y / 3);
+          const seed = (blockX * 41 + blockY * 67 + frame * 19) % 101;
+          const random = Math.random() * 42;
+          const value = Math.max(82, Math.min(225, 120 + seed + random - 40));
+
+          d[i] = value;
+          d[i + 1] = value * .99;
+          d[i + 2] = value * .92;
+          d[i + 3] = 255;
+        }
+      }
+
+      ctx.putImageData(image, 0, 0);
+    }
+
+    function startNoise() {
+      clearInterval(noiseTimer);
+      drawNoise();
+      noiseTimer = setInterval(drawNoise, FRAME_MS);
+    }
+
+    function clearSequence() {
+      sequenceTimers.forEach(clearTimeout);
+      sequenceTimers = [];
+      clearInterval(noiseTimer);
+    }
+
+    function playIntro() {
+      clearSequence();
+      intro.classList.remove('exit');
+      hello.classList.remove('show');
+      site.classList.remove('visible');
+      site.setAttribute('aria-hidden', 'true');
+      startNoise();
+
+      sequenceTimers.push(setTimeout(() => {
+        clearInterval(noiseTimer);
+        hello.classList.add('show');
+      }, STATIC_MS));
+
+      sequenceTimers.push(setTimeout(() => {
+        intro.classList.add('exit');
+        site.classList.add('visible');
+        site.setAttribute('aria-hidden', 'false');
+      }, STATIC_MS + TEXT_MS));
+    }
+
+    replay.addEventListener('click', playIntro);
+    playIntro();
+  </script>
+</body>
+</html>

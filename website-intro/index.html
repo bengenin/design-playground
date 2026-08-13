@@ -1,264 +1,835 @@
-<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Website Intro Experiment</title>
-  <style>
-    :root {
-      --static-duration: 1300ms;
-      --text-duration: 900ms;
-      --fade-duration: 550ms;
-      --screen-width: min(46vw, 320px);
-      --screen-ratio: 1.63 / 1;
-      --bg: #171918;
-      --screen-bg: #d8d6ca;
-      --screen-border: rgba(193, 230, 222, .7);
-      --site-bg: #f1f0ec;
-      --text: #111;
-    }
+<title>Cold Start</title>
 
-    * { box-sizing: border-box; }
+<style>
+  /* ------------------------------------------------------------------
+     COLD START — CRT entrance for bengenin.com
 
-    html, body {
-      margin: 0;
-      min-height: 100%;
-      font-family: Arial, Helvetica, sans-serif;
-      background: var(--site-bg);
-      color: var(--text);
-    }
+     The panel is not an overlay. It is the site's hero: it resolves in
+     the middle of the viewport, lifts to its resting place at the top,
+     and the page assembles underneath it. One canvas throughout — the
+     same cells that scramble as snow settle into the name.
 
-    body { min-height: 100vh; }
+     Tuning lives in the CONFIG block at the top of the <script> below.
+     ------------------------------------------------------------------ */
 
-    .site {
-      min-height: 100vh;
-      padding: clamp(24px, 4vw, 52px);
-      opacity: 0;
-      transform: translateY(8px);
-      transition: opacity .7s ease, transform .7s ease;
-    }
+  :root {
+    /* The whole site lives in the CRT's world — one committed palette,
+       painted explicitly so it holds on any host background. */
+    --void:     #141716;
+    --haze:     #1e2321;
+    --screen:   #0b0d0c;
+    --frame:    rgba(163, 186, 173, 0.55);
+    --glow:     rgba(150, 180, 165, 0.20);
 
-    .site.visible {
-      opacity: 1;
-      transform: translateY(0);
-    }
+    --ink:      #e7e4db;  /* bone, pulled from the bright end of the ramp */
+    --ink-soft: #a5a89f;
+    --ink-dim:  #6f746f;
+    --rule:     rgba(196, 208, 199, 0.14);
+    --sage:     #9fb3a8;
 
-    .nav {
-      display: flex;
-      justify-content: space-between;
-      gap: 24px;
-      font-size: 12px;
-      letter-spacing: .12em;
-    }
+    --font: "Helvetica Neue", Helvetica, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
 
-    .muted { opacity: .45; }
+    /* Written by applyConfig() in JS — do not hand-edit */
+    --panel-w: 560px;
+    --panel-ar: 3.4;
+    --settle-ms: 850ms;
+  }
 
-    .hero {
-      position: absolute;
-      left: clamp(24px, 4vw, 52px);
-      right: clamp(24px, 4vw, 52px);
-      bottom: clamp(34px, 7vw, 74px);
-      max-width: 760px;
-    }
+  * { box-sizing: border-box; }
 
-    .eyebrow {
-      margin: 0 0 18px;
-      font-size: 12px;
-      letter-spacing: .12em;
-      opacity: .42;
-    }
+  html { scroll-behavior: smooth; }
 
-    h1 {
-      margin: 0;
-      font-size: clamp(36px, 6vw, 72px);
-      line-height: .98;
-      font-weight: 500;
-      letter-spacing: -.045em;
-    }
+  body {
+    margin: 0;
+    min-height: 100dvh;
+    background: var(--void);
+    color: var(--ink);
+    font-family: var(--font);
+    -webkit-font-smoothing: antialiased;
+  }
 
-    .current {
-      margin-top: 24px;
-      font-size: 14px;
-      opacity: .55;
-    }
+  /* A faint pool of light behind the panel — the room, not an effect */
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    background: radial-gradient(
+      ellipse 70% 50% at 50% 34%,
+      var(--haze) 0%,
+      var(--void) 68%
+    );
+  }
 
-    .intro {
-      position: fixed;
-      inset: 0;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      background: var(--bg);
-      opacity: 1;
-      transition: opacity var(--fade-duration) ease;
-      z-index: 10;
-    }
+  body.is-intro { overflow: hidden; }
 
-    .intro.exit {
-      opacity: 0;
-      pointer-events: none;
-    }
+  :focus-visible {
+    outline: 2px solid var(--sage);
+    outline-offset: 3px;
+  }
 
-    .screen {
-      position: relative;
-      width: var(--screen-width);
-      aspect-ratio: var(--screen-ratio);
-      padding: 5px;
-      background: #d8ddd5;
-      border: 1px solid var(--screen-border);
-      box-shadow: 0 0 0 2px rgba(95, 130, 126, .45), 0 0 20px rgba(164, 220, 211, .12);
-    }
+  /* The panel sets the measure for the whole page: the text column is
+     exactly as wide as the screen, so both share a left edge. */
+  .site {
+    position: relative;
+    z-index: 1;
+    width: min(calc(100% - 40px), var(--panel-w));
+    margin-inline: auto;
+    padding-bottom: 120px;
+  }
 
-    canvas {
-      display: block;
-      width: 100%;
-      height: 100%;
-      background: var(--screen-bg);
-      image-rendering: pixelated;
-    }
+  /* ================================================================
+     Hero — the panel, and where it comes to rest
+     ================================================================ */
+  .hero {
+    display: flex;
+    justify-content: center;
+    padding-top: 88px;
+    padding-bottom: 64px;
+  }
 
-    .hello {
-      position: absolute;
-      inset: 5px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      background: var(--screen-bg);
-      color: #121313;
-      font-size: clamp(18px, 3vw, 30px);
-      font-weight: 500;
-      letter-spacing: -.035em;
-      opacity: 0;
-      transition: opacity .16s ease;
-    }
+  /* Opening state: the panel sits in the middle of the viewport */
+  body.is-intro .hero {
+    min-height: 100dvh;
+    align-items: center;
+    padding-top: 0;
+    padding-bottom: 0;
+  }
 
-    .hello.show { opacity: 1; }
+  .screen {
+    position: relative;
+    width: 100%;
+    aspect-ratio: var(--panel-ar);
+    background: var(--screen);
+    border: 1px solid var(--frame);
+    box-shadow:
+      0 0 0 4px rgba(0, 0, 0, 0.30),
+      0 0 52px -8px var(--glow);
+  }
 
-    .replay {
-      position: fixed;
-      right: 18px;
-      bottom: 18px;
-      z-index: 20;
-      border: 1px solid rgba(0,0,0,.16);
-      border-radius: 999px;
-      padding: 9px 13px;
-      background: rgba(241,240,236,.9);
-      color: #111;
-      font: inherit;
-      font-size: 12px;
-      cursor: pointer;
-    }
+  .screen__grid {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
 
-    @media (max-width: 600px) {
-      :root { --screen-width: min(64vw, 300px); }
-      .nav .muted { display: none; }
-    }
+  /* Corner falloff — CRT curvature without distorting anything */
+  .screen__glass {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    box-shadow: inset 0 0 30px -6px rgba(0, 0, 0, 0.7);
+  }
 
-    @media (prefers-reduced-motion: reduce) {
-      .intro { display: none; }
-      .site { opacity: 1; transform: none; }
-      .replay { display: none; }
-    }
-  </style>
-</head>
-<body>
-  <main class="site" id="site" aria-hidden="true">
-    <nav class="nav">
-      <span>BEN GENIN</span>
-      <span class="muted">CV · LINKEDIN · ASK BEN</span>
-    </nav>
+  /* ================================================================
+     Content — assembles once the panel has lifted
+     ================================================================ */
+  .content {
+    display: flex;
+    flex-direction: column;
+    gap: 56px;
+    opacity: 1;
+    transform: none;
+    transition:
+      opacity 600ms ease,
+      transform 600ms cubic-bezier(0.22, 0.61, 0.24, 1);
+  }
 
-    <section class="hero">
-      <p class="eyebrow">PARIS → DUBLIN</p>
-      <h1>TECH SALES · GTM · DESIGN · TENNIS</h1>
-      <p class="current">Currently, Lead Account Executive at LinkedIn.</p>
-    </section>
-  </main>
+  body.is-intro .content,
+  body.is-lifting .content {
+    opacity: 0;
+    transform: translateY(14px);
+  }
 
-  <div class="intro" id="intro" aria-label="Intro animation">
+  .lede {
+    margin: 0;
+    font-size: clamp(17px, 2.4vw, 20px);
+    line-height: 1.55;
+    letter-spacing: -0.011em;
+    text-wrap: pretty;
+    color: var(--ink);
+  }
+
+  .block {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .block__eyebrow {
+    margin: 0;
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--ink-dim);
+  }
+
+  .block__rule {
+    height: 1px;
+    background: var(--rule);
+  }
+
+  .block p {
+    margin: 0;
+    max-width: 58ch;
+    font-size: 15px;
+    line-height: 1.7;
+    color: var(--ink-soft);
+  }
+
+  .links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 24px;
+    font-size: 15px;
+  }
+
+  .links a {
+    color: var(--ink);
+    text-decoration: none;
+    border-bottom: 1px solid var(--rule);
+    padding-bottom: 2px;
+    transition: border-color 160ms ease, color 160ms ease;
+  }
+
+  .links a:hover {
+    border-bottom-color: var(--sage);
+    color: #fff;
+  }
+
+  .colophon {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ink-dim);
+  }
+
+  /* ================================================================
+     Control rig — scaffolding, not part of the site
+     ================================================================ */
+  .rig {
+    position: fixed;
+    z-index: 30;
+    right: 16px;
+    bottom: 16px;
+    width: 262px;
+    max-width: calc(100vw - 32px);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    font-family: var(--mono);
+    color: var(--ink);
+  }
+
+  .rig__btn {
+    appearance: none;
+    width: 100%;
+    font: inherit;
+    font-size: 11px;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: var(--ink);
+    background: rgba(15, 18, 17, 0.92);
+    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(8px);
+    border: 1px solid var(--rule);
+    border-radius: 2px;
+    padding: 9px 12px;
+    cursor: pointer;
+    transition: border-color 150ms ease, color 150ms ease;
+  }
+
+  .rig__btn:hover { border-color: var(--sage); color: #fff; }
+
+  .rig__panel {
+    background: rgba(15, 18, 17, 0.92);
+    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(8px);
+    border: 1px solid var(--rule);
+    border-radius: 2px;
+  }
+
+  .rig__panel > summary {
+    list-style: none;
+    cursor: pointer;
+    font-size: 11px;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    padding: 9px 12px;
+    color: var(--ink-dim);
+    transition: color 150ms ease;
+  }
+
+  .rig__panel > summary::-webkit-details-marker { display: none; }
+  .rig__panel > summary:hover { color: var(--ink); }
+  .rig__panel[open] > summary {
+    color: var(--ink);
+    border-bottom: 1px solid var(--rule);
+  }
+
+  .rig__body {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 14px 12px;
+  }
+
+  .knob {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: baseline;
+    gap: 4px 8px;
+  }
+
+  .knob__label {
+    font-size: 10px;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: var(--ink-dim);
+  }
+
+  .knob__value {
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+    color: var(--ink);
+  }
+
+  .knob input[type="range"] {
+    grid-column: 1 / -1;
+    width: 100%;
+    margin: 0;
+    height: 14px;
+    accent-color: var(--sage);
+    cursor: pointer;
+  }
+
+  .knob input[type="text"] {
+    grid-column: 1 / -1;
+    font: inherit;
+    font-size: 12px;
+    color: var(--ink);
+    background: rgba(0, 0, 0, 0.4);
+    border: 1px solid var(--rule);
+    border-radius: 2px;
+    padding: 6px 8px;
+    width: 100%;
+  }
+
+  .rig__total {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    padding-top: 10px;
+    border-top: 1px solid var(--rule);
+    font-size: 10px;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: var(--ink-dim);
+  }
+
+  .rig__total b {
+    font-weight: 400;
+    text-transform: none;
+    font-variant-numeric: tabular-nums;
+    color: var(--ink);
+  }
+
+  @media (max-width: 560px) {
+    /* clear the control rig, which is taller on narrow screens */
+    .site { padding-bottom: 170px; }
+    .hero { padding-top: 56px; padding-bottom: 44px; }
+    .content { gap: 44px; }
+    .rig { left: 12px; right: 12px; bottom: 12px; width: auto; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    .content { transition: opacity 200ms linear; }
+    body.is-intro .content,
+    body.is-lifting .content { transform: none; }
+  }
+</style>
+
+<div class="site">
+  <header class="hero" id="hero">
     <div class="screen">
-      <canvas id="noise" width="72" height="44" aria-hidden="true"></canvas>
-      <div class="hello" id="hello">Hey, I’m Ben</div>
+      <canvas class="screen__grid" id="grid"></canvas>
+      <div class="screen__glass"></div>
     </div>
+  </header>
+
+  <div class="content" id="content">
+    <p class="lede">
+      Placeholder copy. This is where the homepage picks up once the panel
+      settles — the first thing someone reads after the name resolves.
+    </p>
+
+    <section class="block">
+      <p class="block__eyebrow">Now</p>
+      <div class="block__rule"></div>
+      <p>
+        A line or two about what you're working on at the moment. Short
+        enough that it stays true for a few months at a time.
+      </p>
+    </section>
+
+    <section class="block">
+      <p class="block__eyebrow">Selected work</p>
+      <div class="block__rule"></div>
+      <p>
+        Two or three things worth pointing at, each with a sentence about
+        what it was and what came of it.
+      </p>
+    </section>
+
+    <section class="block">
+      <p class="block__eyebrow">Elsewhere</p>
+      <div class="block__rule"></div>
+      <div class="links">
+        <a href="#linkedin">LinkedIn</a>
+        <a href="#cv">CV</a>
+        <a href="#email">Email</a>
+      </div>
+    </section>
+
+    <p class="colophon">Prototype — entrance only</p>
   </div>
+</div>
 
-  <button class="replay" id="replay" type="button">Replay intro</button>
+<div class="rig">
+  <button class="rig__btn" id="replay" type="button">Replay intro</button>
+  <details class="rig__panel">
+    <summary>Tuning</summary>
+    <div class="rig__body" id="knobs">
+      <!-- knobs are built from CONFIG below -->
+      <div class="rig__total"><span>To content</span><b id="total">—</b></div>
+    </div>
+  </details>
+</div>
 
-  <script>
-    const canvas = document.getElementById('noise');
-    const ctx = canvas.getContext('2d', { alpha: false });
-    const intro = document.getElementById('intro');
-    const hello = document.getElementById('hello');
-    const site = document.getElementById('site');
-    const replay = document.getElementById('replay');
+<script>
+(function () {
+  "use strict";
 
-    const STATIC_MS = 1300;
-    const TEXT_MS = 900;
-    const FRAME_MS = 78;
+  /* ==================================================================
+     CONFIG — the only place you need to touch to retune the entrance.
+     Every value is live-editable from the Tuning panel too; these are
+     the defaults the page loads with.
+     ================================================================== */
+  const DEFAULTS = {
+    greeting:         "Hi, I'm Ben",
+    scrambleDuration: 1100, // ms of pure television snow before anything forms
+    resolveDuration:  380,  // ms for the snow to settle into the name
+    holdDuration:     600,  // ms holding the name, centred, before it lifts
+    settleDuration:   850,  // ms for the panel to travel up to its resting place
+    panelWidth:       560,  // px wide (capped at 88vw on small screens)
+    panelAspect:      3.40, // width : height — high numbers give a letterbox
+    cellSize:         7,    // px per chunky cell — bigger = blockier, less legible
+  };
 
-    let noiseTimer;
-    let sequenceTimers = [];
+  /* Static rendering character — analog imperfection, not glitch. */
+  const STATIC = {
+    fps:        20,       // cell refresh rate; ~20 reads analog, 60 reads digital
+    idleFps:    6,        // once settled the panel breathes rather than flickers
+    gutter:     1,        // px of dark gap between cells (the mosaic look)
+    base:       "#0b0d0c",// what shows through the gutters
+    // Warm bone ramp sampled from the reference panel, dark → bright.
+    // Red leads green leads blue at every step — that is what keeps it
+    // reading as bone rather than olive.
+    ramp: ["#1b1a17", "#37352e", "#605c52", "#8f8a7e", "#bcb6a8", "#e9e4d7"],
+    gammaMid:   0.98,     // >1 biases the snow dark, <1 biases it bright
+    gammaSwing: 0.16,     // slow breathing of overall brightness
+    bandDepth:  0.12,     // strength of the drifting horizontal bands
+    // The name has to survive being drawn in cells. Below this many
+    // columns it stops being readable, so on narrow screens the cells
+    // shrink rather than the name breaking up.
+    minCols:    62,
+    // How long a single cell spends flickering between snow and its
+    // final value, as a fraction of resolveDuration. Higher = softer settle.
+    settleBand: 0.35,
+    residual:   0.05,     // chance a cell twitches while the name is forming
+    idleResidual: 0.022,  // and once it is at rest on the page
+  };
 
-    function drawNoise() {
-      const w = canvas.width;
-      const h = canvas.height;
-      const image = ctx.createImageData(w, h);
-      const d = image.data;
-      const frame = Math.floor(performance.now() / FRAME_MS);
+  /* How the name is rasterised onto the cell grid. */
+  const TEXT = {
+    weight:        700,     // heavier strokes survive the downsample better
+    tracking:      "0.04em",// letters need air, but not at the cost of stroke width
+    widthFrac:     0.86,    // fraction of panel width the name spans
+    maxHeightFrac: 0.46,    // ceiling on cap height, as a fraction of panel height
+    gamma:         1.15,    // >1 darkens half-lit edge cells, keeping strokes crisp
+  };
 
-      for (let y = 0; y < h; y++) {
-        for (let x = 0; x < w; x++) {
-          const i = (y * w + x) * 4;
-          const blockX = Math.floor(x / 3);
-          const blockY = Math.floor(y / 3);
-          const seed = (blockX * 41 + blockY * 67 + frame * 19) % 101;
-          const random = Math.random() * 42;
-          const value = Math.max(82, Math.min(225, 120 + seed + random - 40));
+  const FONT_STACK = '"Helvetica Neue", Helvetica, -apple-system, "Segoe UI", Roboto, Arial, sans-serif';
+  const SS = 4; // supersampling factor when rasterising the name
 
-          d[i] = value;
-          d[i + 1] = value * .99;
-          d[i + 2] = value * .92;
-          d[i + 3] = 255;
+  /* ================================================================== */
+
+  const cfg = Object.assign({}, DEFAULTS);
+
+  const body      = document.body;
+  const hero      = document.getElementById("hero");
+  const screenEl  = hero.querySelector(".screen");
+  const canvas    = document.getElementById("grid");
+  const ctx       = canvas.getContext("2d");
+  const replayBtn = document.getElementById("replay");
+  const totalOut  = document.getElementById("total");
+  const knobHost  = document.getElementById("knobs");
+
+  const off  = document.createElement("canvas");
+  const octx = off.getContext("2d", { willReadFrequently: true });
+
+  const reduced = window.matchMedia("(prefers-reduced-motion: reduce)");
+
+  let cols = 0, rows = 0, cellW = 0, cellH = 0, gutterPx = 1;
+  let target = null;   // per-cell ramp index the name resolves to
+  let settleAt = null; // per-cell moment (0..1) it stops being snow
+  let rafId = null;
+  let timers = [];
+  let bandPhase = 0;
+  let onScreen = true;
+
+  /* ---------- Config → CSS custom properties ---------------------- */
+  function applyConfig() {
+    const root = document.documentElement.style;
+    root.setProperty("--panel-w", "min(" + cfg.panelWidth + "px, 88vw)");
+    root.setProperty("--panel-ar", String(cfg.panelAspect));
+    root.setProperty("--settle-ms", cfg.settleDuration + "ms");
+    const total = cfg.scrambleDuration + cfg.resolveDuration +
+                  cfg.holdDuration + cfg.settleDuration;
+    totalOut.textContent = (total / 1000).toFixed(2) + "s";
+  }
+
+  /* ---------- Grid geometry --------------------------------------- */
+  function layout() {
+    const rect = canvas.getBoundingClientRect();
+    if (!rect.width || !rect.height) return false;
+
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.width  = Math.round(rect.width * dpr);
+    canvas.height = Math.round(rect.height * dpr);
+
+    // Cells stay square, and never grow so large that the name breaks up
+    const cell = Math.min(cfg.cellSize, rect.width / STATIC.minCols);
+    cols = Math.max(8, Math.round(rect.width / cell));
+    rows = Math.max(5, Math.round(rect.height / cell));
+
+    cellW = canvas.width / cols;
+    cellH = canvas.height / rows;
+    gutterPx = STATIC.gutter * dpr;
+    return true;
+  }
+
+  /* ---------- Rasterise the name onto the cell grid ---------------- */
+  function buildTarget() {
+    const w = cols * SS, h = rows * SS;
+    off.width = w;
+    off.height = h;
+
+    octx.clearRect(0, 0, w, h);
+    octx.fillStyle = "#fff";
+    octx.textAlign = "center";
+    octx.textBaseline = "middle";
+    if ("letterSpacing" in octx) octx.letterSpacing = TEXT.tracking;
+
+    // Size the type to span widthFrac of the panel, then cap its height
+    const text = cfg.greeting;
+    let size = h * 0.6;
+    octx.font = TEXT.weight + " " + size + "px " + FONT_STACK;
+    const measured = octx.measureText(text).width || 1;
+    size = Math.min(size * ((w * TEXT.widthFrac) / measured),
+                    (h * TEXT.maxHeightFrac) / 0.72);
+    octx.font = TEXT.weight + " " + size + "px " + FONT_STACK;
+    octx.fillText(text, w / 2, h / 2);
+
+    // Average each SS×SS block into one cell's coverage, so edge cells
+    // land on mid-ramp tones instead of hard-clipping to on/off
+    const data = octx.getImageData(0, 0, w, h).data;
+    const levels = STATIC.ramp.length;
+    target = new Uint8Array(cols * rows);
+
+    for (let y = 0; y < rows; y++) {
+      for (let x = 0; x < cols; x++) {
+        let sum = 0;
+        for (let j = 0; j < SS; j++) {
+          const row = (y * SS + j) * w;
+          for (let i = 0; i < SS; i++) {
+            sum += data[((row + x * SS + i) << 2) + 3];
+          }
         }
+        const cov = sum / (SS * SS * 255);
+        target[y * cols + x] = Math.min(
+          levels - 1,
+          Math.round(Math.pow(cov, TEXT.gamma) * (levels - 1))
+        );
+      }
+    }
+  }
+
+  /* Each cell gets its own moment to stop scrambling, so the name
+     precipitates out of the snow rather than cutting in. */
+  function seedSettle() {
+    settleAt = new Float32Array(cols * rows);
+    const span = 1 - STATIC.settleBand;
+    for (let i = 0; i < settleAt.length; i++) {
+      settleAt[i] = Math.random() * span;
+    }
+  }
+
+  /* ---------- One frame -------------------------------------------
+     progress < 0  → pure snow
+     0 … 1         → cells settling onto the name
+     progress >= 1 → name at rest, with a little residual life
+     ---------------------------------------------------------------- */
+  function draw(t, progress, residual) {
+    const w = canvas.width, h = canvas.height;
+    if (!w || !h || !target) return;
+
+    ctx.fillStyle = STATIC.base;
+    ctx.fillRect(0, 0, w, h);
+
+    const levels = STATIC.ramp.length;
+    const band = STATIC.settleBand;
+
+    // Overall brightness breathes slowly, with a little frame-to-frame drift
+    const gamma =
+      STATIC.gammaMid +
+      STATIC.gammaSwing * Math.sin(t * 0.0027) +
+      (Math.random() - 0.5) * 0.05;
+
+    bandPhase += 0.06;
+
+    for (let y = 0; y < rows; y++) {
+      // Soft horizontal banding drifting down the panel
+      const rowGamma = gamma * (1 + STATIC.bandDepth * Math.sin(y * 0.9 + bandPhase));
+      const py = Math.round(y * cellH);
+      const rh = Math.max(1, Math.round(cellH - gutterPx));
+
+      for (let x = 0; x < cols; x++) {
+        const i = y * cols + x;
+        let idx;
+
+        // How far this particular cell is through its own settle
+        const local = progress < 0 ? -1 : (progress - settleAt[i]) / band;
+
+        if (local >= 1) {
+          idx = target[i];
+          // Residual twitch keeps the screen alive under the name
+          if (Math.random() < residual) {
+            idx = Math.max(0, Math.min(levels - 1, idx + (Math.random() < 0.5 ? -1 : 1)));
+          }
+        } else if (local > 0 && Math.random() < local) {
+          idx = target[i];
+        } else {
+          idx = Math.floor(Math.pow(Math.random(), rowGamma) * levels);
+          if (idx >= levels) idx = levels - 1;
+        }
+
+        ctx.fillStyle = STATIC.ramp[idx];
+        ctx.fillRect(
+          Math.round(x * cellW), py,
+          Math.max(1, Math.round(cellW - gutterPx)), rh
+        );
+      }
+    }
+  }
+
+  /* ---------- Loops ------------------------------------------------ */
+  function stop() {
+    timers.forEach(clearTimeout);
+    timers = [];
+    if (rafId !== null) { cancelAnimationFrame(rafId); rafId = null; }
+  }
+
+  function at(ms, fn) { timers.push(setTimeout(fn, ms)); }
+
+  /* Once the name is at rest the panel keeps breathing, slowly, and
+     only while it is actually on screen and the tab is visible. */
+  function idle() {
+    const interval = 1000 / STATIC.idleFps;
+    let last = -Infinity;
+
+    function frame(now) {
+      if (now - last >= interval) {
+        draw(now, 1, STATIC.idleResidual);
+        last = now;
+      }
+      rafId = requestAnimationFrame(frame);
+    }
+
+    if (reduced.matches) { draw(performance.now(), 1, 0); return; }
+    rafId = requestAnimationFrame(frame);
+  }
+
+  /* ---------- The lift ---------------------------------------------
+     FLIP: measure the panel centred, let the layout drop to its final
+     shape, then invert the difference and release it. Nothing animates
+     a height, so the travel stays smooth.
+     ---------------------------------------------------------------- */
+  function lift() {
+    const first = screenEl.getBoundingClientRect().top;
+
+    body.classList.remove("is-intro");
+    body.classList.add("is-lifting");
+
+    const delta = first - screenEl.getBoundingClientRect().top;
+
+    hero.style.transition = "none";
+    hero.style.transform = "translateY(" + delta + "px)";
+    void hero.offsetWidth;
+
+    hero.style.transition = "transform " + cfg.settleDuration +
+                            "ms cubic-bezier(0.22, 0.61, 0.24, 1)";
+    hero.style.transform = "translateY(0)";
+
+    // Content comes up as the panel arrives, not after it
+    at(Math.round(cfg.settleDuration * 0.45), function () {
+      body.classList.remove("is-lifting");
+    });
+
+    at(cfg.settleDuration, function () {
+      hero.style.transition = "";
+      hero.style.transform = "";
+    });
+  }
+
+  /* ---------- Sequence -------------------------------------------- */
+  function play() {
+    stop();
+
+    hero.style.transition = "none";
+    hero.style.transform = "";
+    body.classList.remove("is-lifting");
+    body.classList.add("is-intro");
+    window.scrollTo(0, 0);
+    void hero.offsetWidth;
+    hero.style.transition = "";
+
+    applyConfig();
+    if (!layout()) return;
+    buildTarget();
+    seedSettle();
+
+    if (reduced.matches) {
+      // No flicker: the name is simply already there, then it lifts.
+      draw(performance.now(), 1, 0);
+      at(cfg.holdDuration, function () { lift(); idle(); });
+      return;
+    }
+
+    const started = performance.now();
+    const interval = 1000 / STATIC.fps;
+    const scramble = cfg.scrambleDuration;
+    const resolve = Math.max(1, cfg.resolveDuration);
+    const until = scramble + resolve + cfg.holdDuration;
+    let last = -Infinity;
+
+    function frame(now) {
+      const elapsed = now - started;
+
+      if (now - last >= interval) {
+        const progress = elapsed < scramble ? -1 : (elapsed - scramble) / resolve;
+        draw(now, Math.min(progress, 1), STATIC.residual);
+        last = now;
       }
 
-      ctx.putImageData(image, 0, 0);
+      if (elapsed >= until) { rafId = null; lift(); idle(); return; }
+      rafId = requestAnimationFrame(frame);
+    }
+    rafId = requestAnimationFrame(frame);
+  }
+
+  /* ---------- Tuning knobs ---------------------------------------- */
+  const KNOBS = [
+    { key: "greeting",         label: "Name",     type: "text" },
+    { key: "scrambleDuration", label: "Scramble", min: 0,   max: 3000, step: 50,   unit: "ms" },
+    { key: "resolveDuration",  label: "Resolve",  min: 50,  max: 2000, step: 25,   unit: "ms" },
+    { key: "holdDuration",     label: "Hold",     min: 0,   max: 2500, step: 50,   unit: "ms" },
+    { key: "settleDuration",   label: "Lift",     min: 200, max: 2500, step: 50,   unit: "ms" },
+    { key: "panelWidth",       label: "Width",    min: 280, max: 900,  step: 10,   unit: "px" },
+    { key: "panelAspect",      label: "Aspect",   min: 1.2, max: 5,    step: 0.05, unit: ":1" },
+    { key: "cellSize",         label: "Cell size",min: 3,   max: 20,   step: 1,    unit: "px" },
+  ];
+
+  const totalRow = knobHost.firstElementChild;
+
+  KNOBS.forEach(function (k) {
+    const wrap = document.createElement("label");
+    wrap.className = "knob";
+
+    const name = document.createElement("span");
+    name.className = "knob__label";
+    name.textContent = k.label;
+
+    const out = document.createElement("span");
+    out.className = "knob__value";
+
+    const input = document.createElement("input");
+
+    if (k.type === "text") {
+      input.type = "text";
+      input.value = cfg[k.key];
+      input.addEventListener("input", function () {
+        cfg[k.key] = input.value;
+        if (layout()) buildTarget();
+      });
+    } else {
+      input.type = "range";
+      input.min = k.min; input.max = k.max; input.step = k.step;
+      input.value = cfg[k.key];
+
+      const render = function () {
+        const v = cfg[k.key];
+        out.textContent = (k.step < 1 ? v.toFixed(2) : v) + k.unit;
+      };
+
+      input.addEventListener("input", function () {
+        cfg[k.key] = parseFloat(input.value);
+        render();
+        applyConfig();
+        if (layout()) { buildTarget(); seedSettle(); }
+      });
+
+      render();
     }
 
-    function startNoise() {
-      clearInterval(noiseTimer);
-      drawNoise();
-      noiseTimer = setInterval(drawNoise, FRAME_MS);
-    }
+    wrap.append(name, out, input);
+    knobHost.insertBefore(wrap, totalRow);
+  });
 
-    function clearSequence() {
-      sequenceTimers.forEach(clearTimeout);
-      sequenceTimers = [];
-      clearInterval(noiseTimer);
-    }
+  /* ---------- Wiring ---------------------------------------------- */
+  replayBtn.addEventListener("click", play);
 
-    function playIntro() {
-      clearSequence();
-      intro.classList.remove('exit');
-      hello.classList.remove('show');
-      site.classList.remove('visible');
-      site.setAttribute('aria-hidden', 'true');
-      startNoise();
+  window.addEventListener("resize", function () {
+    applyConfig();
+    if (layout()) buildTarget();
+  });
 
-      sequenceTimers.push(setTimeout(() => {
-        clearInterval(noiseTimer);
-        hello.classList.add('show');
-      }, STATIC_MS));
+  // Don't burn frames on a panel nobody is looking at
+  document.addEventListener("visibilitychange", function () {
+    if (document.hidden) { if (rafId !== null) { cancelAnimationFrame(rafId); rafId = null; } }
+    else if (rafId === null && !body.classList.contains("is-intro")) { idle(); }
+  });
 
-      sequenceTimers.push(setTimeout(() => {
-        intro.classList.add('exit');
-        site.classList.add('visible');
-        site.setAttribute('aria-hidden', 'false');
-      }, STATIC_MS + TEXT_MS));
-    }
+  if ("IntersectionObserver" in window) {
+    new IntersectionObserver(function (entries) {
+      onScreen = entries[0].isIntersecting;
+      if (!onScreen && rafId !== null && !body.classList.contains("is-intro")) {
+        cancelAnimationFrame(rafId);
+        rafId = null;
+      } else if (onScreen && rafId === null && !body.classList.contains("is-intro")) {
+        idle();
+      }
+    }, { threshold: 0 }).observe(screenEl);
+  }
 
-    replay.addEventListener('click', playIntro);
-    playIntro();
-  </script>
-</body>
-</html>
+  applyConfig();
+  play();
+})();
+</script>
